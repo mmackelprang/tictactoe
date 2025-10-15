@@ -194,12 +194,26 @@
             InvokeAsync(StateHasChanged);
         });
 
-        hubConnection.On<GameState>("OnGameStarted", async (gameState) =>
+        hubConnection.On<GameState>("OnGameStarted", (gameState) =>
         {
             // Store game state in session and navigate to game page
-            await SessionStorage.SetAsync("currentGameId", gameState.GameId);
-            await SessionStorage.SetAsync("currentGameState", gameState);
-            Navigation.NavigateTo("/game");
+            InvokeAsync(async () =>
+            {
+                await SessionStorage.SetAsync("currentGameId", gameState.GameId);
+                await SessionStorage.SetAsync("currentGameState", gameState);
+                
+                // Leave lobby cleanly before navigating to avoid game being ended
+                try
+                {
+                    await hubConnection.SendAsync("LeaveLobby");
+                }
+                catch
+                {
+                    // Ignore errors during cleanup
+                }
+                
+                Navigation.NavigateTo("/game");
+            });
         });
 
         hubConnection.On<string>("Error", (message) =>

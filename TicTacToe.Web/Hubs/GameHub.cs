@@ -180,6 +180,27 @@ public class GameHub : Hub
     }
 
     /// <summary>
+    /// Called when a player reconnects to an existing game with a new connection.
+    /// </summary>
+    /// <param name="gameId">The game ID to rejoin.</param>
+    /// <param name="oldConnectionId">The old connection ID to replace.</param>
+    public async Task RejoinGame(string gameId, string oldConnectionId)
+    {
+        var game = _gameService.GetGame(gameId);
+        if (game == null)
+        {
+            await Clients.Caller.SendAsync("Error", "Game not found");
+            return;
+        }
+
+        // Update the connection ID in the game
+        _gameService.UpdateConnectionId(gameId, oldConnectionId, Context.ConnectionId);
+
+        // Send acknowledgment (game state will be loaded from session on client)
+        await Clients.Caller.SendAsync("OnGameRejoined");
+    }
+
+    /// <summary>
     /// Called when a player makes a move.
     /// </summary>
     /// <param name="gameId">The game ID.</param>
