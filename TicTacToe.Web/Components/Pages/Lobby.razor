@@ -194,10 +194,11 @@
             InvokeAsync(StateHasChanged);
         });
 
-        hubConnection.On<GameState>("OnGameStarted", (gameState) =>
+        hubConnection.On<GameState>("OnGameStarted", async (gameState) =>
         {
-            // Store game state and navigate to game page
-            SessionStorage.SetAsync("currentGameId", gameState.GameId);
+            // Store game state in session and navigate to game page
+            await SessionStorage.SetAsync("currentGameId", gameState.GameId);
+            await SessionStorage.SetAsync("currentGameState", gameState);
             Navigation.NavigateTo("/game");
         });
 

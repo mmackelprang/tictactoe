@@ -163,6 +163,7 @@
         {
             var usernameResult = await SessionStorage.GetAsync<string>("username");
             var gameIdResult = await SessionStorage.GetAsync<string>("currentGameId");
+            var gameStateResult = await SessionStorage.GetAsync<GameState>("currentGameState");
 
             if (!usernameResult.Success || string.IsNullOrEmpty(usernameResult.Value))
             {
@@ -175,6 +176,12 @@
             if (gameIdResult.Success && !string.IsNullOrEmpty(gameIdResult.Value))
             {
                 currentGameId = gameIdResult.Value;
+            }
+
+            // Load the initial game state from session if available
+            if (gameStateResult.Success && gameStateResult.Value != null)
+            {
+                gameState = gameStateResult.Value;
             }
 
         // Set up SignalR connection
@@ -235,6 +242,14 @@
         {
             await hubConnection.StartAsync();
             myConnectionId = hubConnection.ConnectionId ?? "";
+            
+            // If we loaded the game state from session, update it with the connection ID
+            if (gameState != null)
+            {
+                // The connection ID might be different now, so we need to ensure
+                // the game recognizes us as the correct player
+                StateHasChanged();
+            }
             
             // If we have a game ID, we're reconnecting
             // Otherwise wait for OnGameStarted event
