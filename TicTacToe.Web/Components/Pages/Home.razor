@@ -1,0 +1,88 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedSessionStorage SessionStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Tic-Tac-Toe - Network Multiplayer</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 text-center">
+            <h1 class="display-4 mb-4">🎮 Tic-Tac-Toe</h1>
+            <p class="lead mb-4">Welcome to the multiplayer Tic-Tac-Toe game!</p>
+            
+            @if (!hasUsername)
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Enter Your Name</h5>
+                        <div class="mb-3">
+                            <input type="text" 
+                                   class="form-control" 
+                                   @bind="username" 
+                                   @bind:event="oninput"
+                                   placeholder="Enter your username"
+                                   maxlength="20" />
+                        </div>
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">@errorMessage</div>
+                        }
+                        <button class="btn btn-primary btn-lg" 
+                                @onclick="EnterLobby"
+                                disabled="@string.IsNullOrWhiteSpace(username)">
+                            Enter Lobby
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private bool hasUsername = false;
+    private string errorMessage = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Check if user already has a username stored
+            try
+            {
+                var result = await SessionStorage.GetAsync<string>("username");
+                if (result.Success && !string.IsNullOrEmpty(result.Value))
+                {
+                    Navigation.NavigateTo("/lobby");
+                }
+            }
+            catch
+            {
+                // Ignore errors during initialization
+            }
+        }
+    }
+
+    private async Task EnterLobby()
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            errorMessage = "Please enter a username";
+            return;
+        }
+
+        if (username.Length < 2)
+        {
+            errorMessage = "Username must be at least 2 characters";
+            return;
+        }
+
+        // Store username and navigate to lobby
+        await SessionStorage.SetAsync("username", username.Trim());
+        Navigation.NavigateTo("/lobby");
+    }
+}
+
