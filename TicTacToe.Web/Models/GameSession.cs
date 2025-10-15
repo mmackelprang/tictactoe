@@ -89,12 +89,18 @@ public class GameSession
     /// </summary>
     public GameState ToGameState()
     {
-        var boardData = new char[Board.Size * Board.Size];
-        for (int row = 0; row < Board.Size; row++)
+        var layers = Board.Is3D ? Board.Layers : 1;
+        var boardData = new char[layers * Board.Size * Board.Size];
+        
+        for (int layer = 0; layer < layers; layer++)
         {
-            for (int col = 0; col < Board.Size; col++)
+            for (int row = 0; row < Board.Size; row++)
             {
-                boardData[row * Board.Size + col] = Board.GetMark(row, col);
+                for (int col = 0; col < Board.Size; col++)
+                {
+                    var index = layer * Board.Size * Board.Size + row * Board.Size + col;
+                    boardData[index] = Board.GetMark(row, col, layer);
+                }
             }
         }
 
@@ -103,6 +109,8 @@ public class GameSession
             GameId = GameId,
             BoardSize = Board.Size,
             WinCondition = Board.WinCondition,
+            Is3D = Board.Is3D,
+            Layers = layers,
             BoardData = boardData,
             Player1ConnectionId = Player1ConnectionId,
             Player1Username = Player1.Name,

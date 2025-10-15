@@ -64,7 +64,24 @@
                             </button>
                         }
 
+                        @if (gameState.Is3D)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Select Layer: </label>
+                                <select class="form-select d-inline-block w-auto" @bind="currentLayer">
+                                    @for (int i = 0; i < gameState.Layers; i++)
+                                    {
+                                        <option value="@i">Layer @i</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
                         <div class="game-board mt-4">
+                            @if (gameState.Is3D)
+                            {
+                                <h6>Layer @currentLayer</h6>
+                            }
                             @for (int row = 0; row < gameState.BoardSize; row++)
                             {
                                 <div class="board-row">
@@ -72,11 +89,12 @@
                                     {
                                         var currentRow = row;
                                         var currentCol = col;
-                                        var cellIndex = row * gameState.BoardSize + col;
+                                        var layer = currentLayer;
+                                        var cellIndex = layer * gameState.BoardSize * gameState.BoardSize + row * gameState.BoardSize + col;
                                         var cellValue = gameState.BoardData[cellIndex];
                                         
                                         <button class="board-cell @GetCellClass(cellValue)"
-                                                @onclick="() => MakeMove(currentRow, currentCol)"
+                                                @onclick="() => MakeMove(currentRow, currentCol, layer)"
                                                 disabled="@(!CanMakeMove(cellValue))">
                                             @(cellValue == ' ' ? "" : cellValue.ToString())
                                         </button>
@@ -146,6 +164,7 @@
     private string errorMessage = "";
     private string myConnectionId = "";
     private bool isInitialized = false;
+    private int currentLayer = 0;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -199,11 +218,11 @@
             InvokeAsync(StateHasChanged);
         });
 
-        hubConnection.On<int, int, char>("OnMoveMade", (row, col, mark) =>
+        hubConnection.On<int, int, int, char>("OnMoveMade", (row, col, layer, mark) =>
         {
             if (gameState != null)
             {
-                var cellIndex = row * gameState.BoardSize + col;
+                var cellIndex = layer * gameState.BoardSize * gameState.BoardSize + row * gameState.BoardSize + col;
                 gameState.BoardData[cellIndex] = mark;
                 
                 // Toggle current player
@@ -300,7 +319,7 @@
         }
     }
 
-    private async Task MakeMove(int row, int col)
+    private async Task MakeMove(int row, int col, int layer = 0)
     {
         if (hubConnection is not null && gameState is not null && !gameState.IsGameOver)
         {
@@ -310,7 +329,7 @@
                 return;
             }
 
-            var cellIndex = row * gameState.BoardSize + col;
+            var cellIndex = layer * gameState.BoardSize * gameState.BoardSize + row * gameState.BoardSize + col;
             if (gameState.BoardData[cellIndex] != ' ')
             {
                 errorMessage = "Cell is already occupied!";
@@ -321,7 +340,7 @@
 
             try
             {
-                await hubConnection.SendAsync("MakeMove", currentGameId, row, col);
+                await hubConnection.SendAsync("MakeMove", currentGameId, row, col, layer);
             }
             catch (Exception ex)
             {

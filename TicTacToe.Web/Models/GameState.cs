@@ -21,7 +21,17 @@ public class GameState
     public int WinCondition { get; set; } = 3;
 
     /// <summary>
-    /// Gets or sets the current board state (flattened 2D array).
+    /// Gets or sets whether this is a 3D game.
+    /// </summary>
+    public bool Is3D { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of layers (depth) in the board.
+    /// </summary>
+    public int Layers { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets the current board state (flattened 3D array: layer * size * size + row * size + col).
     /// </summary>
     public char[] BoardData { get; set; } = Array.Empty<char>();
 

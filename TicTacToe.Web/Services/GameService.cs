@@ -26,6 +26,7 @@ public class GameService
     /// <param name="player2Username">Player 2's username.</param>
     /// <param name="boardSize">The board size.</param>
     /// <param name="winCondition">The win condition.</param>
+    /// <param name="is3D">Whether to create a 3D board.</param>
     /// <returns>The created game session.</returns>
     public GameSession CreatePlayerVsPlayerGame(
         string player1ConnectionId, 
@@ -33,9 +34,10 @@ public class GameService
         string player2ConnectionId,
         string player2Username,
         int boardSize = 3,
-        int winCondition = 3)
+        int winCondition = 3,
+        bool is3D = false)
     {
-        var board = new Board(boardSize, winCondition);
+        var board = new Board(boardSize, winCondition, is3D);
         var player1 = new NetworkPlayer('X', player1Username);
         var player2 = new NetworkPlayer('O', player2Username);
 
@@ -60,15 +62,17 @@ public class GameService
     /// <param name="boardSize">The board size.</param>
     /// <param name="winCondition">The win condition.</param>
     /// <param name="aiDifficulty">The AI difficulty level.</param>
+    /// <param name="is3D">Whether to create a 3D board.</param>
     /// <returns>The created game session.</returns>
     public GameSession CreatePlayerVsAIGame(
         string playerConnectionId,
         string playerUsername,
         int boardSize = 3,
         int winCondition = 3,
-        AIDifficulty aiDifficulty = AIDifficulty.Medium)
+        AIDifficulty aiDifficulty = AIDifficulty.Medium,
+        bool is3D = false)
     {
-        var board = new Board(boardSize, winCondition);
+        var board = new Board(boardSize, winCondition, is3D);
         var player = new NetworkPlayer('X', playerUsername);
         
         // Create AI player based on difficulty
@@ -116,8 +120,9 @@ public class GameService
     /// <param name="row">The row position.</param>
     /// <param name="col">The column position.</param>
     /// <param name="connectionId">The connection ID of the player making the move.</param>
+    /// <param name="layer">The layer position (0 for 2D games).</param>
     /// <returns>True if the move was successful.</returns>
-    public bool MakeMove(string gameId, int row, int col, string connectionId)
+    public bool MakeMove(string gameId, int row, int col, string connectionId, int layer = 0)
     {
         var game = GetGame(gameId);
         if (game == null || game.IsGameOver)
@@ -132,7 +137,7 @@ public class GameService
             return false;
 
         // Make the move
-        if (!game.Board.PlaceMark(row, col, game.CurrentPlayer.Mark))
+        if (!game.Board.PlaceMark(row, col, game.CurrentPlayer.Mark, layer))
             return false;
 
         // Check for win

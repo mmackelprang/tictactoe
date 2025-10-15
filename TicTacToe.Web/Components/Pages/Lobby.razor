@@ -68,6 +68,17 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="is3DMode" id="is3DModeLobby">
+                                    <label class="form-check-label" for="is3DModeLobby">
+                                        Enable 3D Mode (Multiple Layers)
+                                    </label>
+                                </div>
+                                <small class="text-muted">When enabled, the game will have multiple layers equal to the board size</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -173,6 +184,7 @@
     private int boardSize = 3;
     private int winCondition = 3;
     private string aiDifficulty = "Medium";
+    private bool is3DMode = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -214,6 +226,12 @@
             if (aiDifficultyResult.Success && !string.IsNullOrEmpty(aiDifficultyResult.Value))
             {
                 aiDifficulty = aiDifficultyResult.Value;
+            }
+
+            var is3DModeResult = await SessionStorage.GetAsync<bool>("is3DMode");
+            if (is3DModeResult.Success)
+            {
+                is3DMode = is3DModeResult.Value;
             }
 
         // Set up SignalR connection
@@ -312,6 +330,7 @@
         await SessionStorage.SetAsync("boardSize", boardSize);
         await SessionStorage.SetAsync("winCondition", winCondition);
         await SessionStorage.SetAsync("aiDifficulty", aiDifficulty);
+        await SessionStorage.SetAsync("is3DMode", is3DMode);
     }
 
     private async Task InvitePlayer(string targetConnectionId)
@@ -370,7 +389,7 @@
             try
             {
                 await SaveConfiguration();
-                await hubConnection.SendAsync("StartGameWithAI", boardSize, winCondition, aiDifficulty);
+                await hubConnection.SendAsync("StartGameWithAI", boardSize, winCondition, aiDifficulty, is3DMode);
             }
             catch (Exception ex)
             {

@@ -158,7 +158,8 @@ public class GameHub : Hub
     /// <param name="boardSize">The board size.</param>
     /// <param name="winCondition">The win condition.</param>
     /// <param name="aiDifficulty">The AI difficulty level.</param>
-    public async Task StartGameWithAI(int boardSize = 3, int winCondition = 3, string aiDifficulty = "Medium")
+    /// <param name="is3D">Whether to create a 3D board.</param>
+    public async Task StartGameWithAI(int boardSize = 3, int winCondition = 3, string aiDifficulty = "Medium", bool is3D = false)
     {
         var user = _lobbyService.GetUser(Context.ConnectionId);
         if (user == null)
@@ -173,7 +174,7 @@ public class GameHub : Hub
             : AIDifficulty.Medium;
 
         // Create the game with specified settings
-        var game = _gameService.CreatePlayerVsAIGame(Context.ConnectionId, user.Username, boardSize, winCondition, difficulty);
+        var game = _gameService.CreatePlayerVsAIGame(Context.ConnectionId, user.Username, boardSize, winCondition, difficulty, is3D);
 
         // Update user status
         _lobbyService.UpdateUserStatus(Context.ConnectionId, UserStatus.InGame, game.GameId);
@@ -214,7 +215,8 @@ public class GameHub : Hub
     /// <param name="gameId">The game ID.</param>
     /// <param name="row">The row position.</param>
     /// <param name="col">The column position.</param>
-    public async Task MakeMove(string gameId, int row, int col)
+    /// <param name="layer">The layer position (0 for 2D games).</param>
+    public async Task MakeMove(string gameId, int row, int col, int layer = 0)
     {
         var game = _gameService.GetGame(gameId);
         if (game == null)
@@ -224,7 +226,7 @@ public class GameHub : Hub
         }
 
         // Make the move
-        if (!_gameService.MakeMove(gameId, row, col, Context.ConnectionId))
+        if (!_gameService.MakeMove(gameId, row, col, Context.ConnectionId, layer))
         {
             await Clients.Caller.SendAsync("Error", "Invalid move");
             return;
@@ -236,12 +238,12 @@ public class GameHub : Hub
         // Broadcast the move to both players
         if (game.IsAIGame)
         {
-            await Clients.Caller.SendAsync("OnMoveMade", row, col, mark);
+            await Clients.Caller.SendAsync("OnMoveMade", row, col, layer, mark);
         }
         else
         {
             await Clients.Clients(game.Player1ConnectionId, game.Player2ConnectionId)
-                .SendAsync("OnMoveMade", row, col, mark);
+                .SendAsync("OnMoveMade", row, col, layer, mark);
         }
 
         // Check if game is over
@@ -286,11 +288,11 @@ public class GameHub : Hub
                 // Small delay for better UX
                 await Task.Delay(500);
 
-                // Make AI move
-                if (_gameService.MakeMove(gameId, aiMove.Value.row, aiMove.Value.col, string.Empty))
+                // Make AI move (always on layer 0 for now - AI doesn't support 3D yet)
+                if (_gameService.MakeMove(gameId, aiMove.Value.row, aiMove.Value.col, string.Empty, 0))
                 {
                     // Broadcast AI's move
-                    await Clients.Caller.SendAsync("OnMoveMade", aiMove.Value.row, aiMove.Value.col, game.Player2.Mark);
+                    await Clients.Caller.SendAsync("OnMoveMade", aiMove.Value.row, aiMove.Value.col, 0, game.Player2.Mark);
 
                     // Check if game is over after AI move
                     if (game.IsGameOver)
