@@ -11,19 +11,36 @@ class Program
         {
             Console.Clear();
             Console.WriteLine("=== TIC-TAC-TOE ===");
+            Console.WriteLine("\nSelect UI Mode:");
+            Console.WriteLine("1. Console Mode");
+            Console.WriteLine("2. GUI Mode (Terminal UI)");
+            Console.WriteLine("3. Exit");
+            Console.Write("\nEnter your choice (1-3): ");
+
+            string? uiChoice = Console.ReadLine();
+
+            if (uiChoice == "3")
+            {
+                Console.WriteLine("Thanks for playing!");
+                break;
+            }
+
+            bool useGui = uiChoice == "2";
+
+            Console.Clear();
+            Console.WriteLine("=== TIC-TAC-TOE ===");
             Console.WriteLine("\nSelect Game Mode:");
             Console.WriteLine("1. Human vs Human");
             Console.WriteLine("2. Human vs Computer");
             Console.WriteLine("3. Computer vs Computer");
-            Console.WriteLine("4. Exit");
+            Console.WriteLine("4. Back");
             Console.Write("\nEnter your choice (1-4): ");
 
             string? choice = Console.ReadLine();
 
             if (choice == "4")
             {
-                Console.WriteLine("Thanks for playing!");
-                break;
+                continue;
             }
 
             // Get board configuration
@@ -61,8 +78,16 @@ class Program
                     continue;
             }
 
-            var game = new GameController(player1, player2, boardSize, winCondition);
-            game.PlayGame();
+            if (useGui)
+            {
+                var gui = new GuiInterface(player1, player2, boardSize, winCondition);
+                gui.Run();
+            }
+            else
+            {
+                var game = new GameController(player1, player2, boardSize, winCondition);
+                game.PlayGame();
+            }
 
             Console.WriteLine("\nWould you like to play again? (y/n): ");
             string? playAgain = Console.ReadLine();
