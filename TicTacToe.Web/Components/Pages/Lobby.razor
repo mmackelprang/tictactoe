@@ -326,8 +326,10 @@
         }
     }
 
-    private void LeaveLobbyClick()
+    private async Task LeaveLobbyClick()
     {
+        // Clear the username from session storage
+        await SessionStorage.DeleteAsync("username");
         Navigation.NavigateTo("/");
     }
 
