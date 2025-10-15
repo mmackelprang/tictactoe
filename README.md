@@ -65,11 +65,30 @@ dotnet run
 
 ## Future Enhancements
 
+### In Active Planning
+See [ProjectPlan.md](ProjectPlan.md) for detailed implementation plans.
+
+**Network Multiplayer & Web Application**:
+- Convert to ASP.NET Core web application with Blazor/SignalR
+- Replace Console UI with browser-based interactive interface
+- Implement game lobby for matchmaking with connected users
+- Support multiple concurrent games on server
+- Real-time game synchronization between players
+- Game invitation and acceptance system
+- Spectator mode for watching games
+
+**Advanced AI (Minimax & Alpha-Beta Pruning)**:
+- Implement minimax algorithm for optimal move calculation
+- Add alpha-beta pruning for performance optimization
+- Multiple difficulty levels (Easy, Medium, Hard)
+- Optimized AI for various board sizes
+
+### Future Considerations
 - 3D board support (stacked grids with cross-layer win conditions)
-- Network multiplayer support
-- Advanced AI strategies (minimax, alpha-beta pruning)
 - Native desktop GUI (WPF, WinForms, or Avalonia)
 - Save/load game state
+- Player profiles and statistics
+- Game replay functionality
 
 ## License
 
