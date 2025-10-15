@@ -68,6 +68,19 @@ public class Board
     }
 
     /// <summary>
+    /// Clears a position on the board (used for simulating moves).
+    /// </summary>
+    /// <param name="row">The row index (0-based).</param>
+    /// <param name="col">The column index (0-based).</param>
+    internal void ClearPosition(int row, int col)
+    {
+        if (IsValidPosition(row, col))
+        {
+            _grid[row, col] = ' ';
+        }
+    }
+
+    /// <summary>
     /// Checks if a position is valid (within board boundaries).
     /// </summary>
     /// <param name="row">The row index.</param>
