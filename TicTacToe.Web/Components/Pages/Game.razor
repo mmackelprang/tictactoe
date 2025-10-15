@@ -1,0 +1,338 @@
+@page "/game"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using TicTacToe.Web.Models
+@inject NavigationManager Navigation
+@inject ProtectedSessionStorage SessionStorage
+@implements IAsyncDisposable
+
+<PageTitle>Game - Tic-Tac-Toe</PageTitle>
+
+<div class="container mt-4">
+    @if (gameState == null)
+    {
+        <div class="alert alert-info">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            Loading game...
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0">Tic-Tac-Toe</h4>
+                            <button class="btn btn-sm btn-secondary" @onclick="LeaveGame">
+                                Leave Game
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <h5>
+                                <span class="badge bg-primary">@gameState.Player1Username (@gameState.Player1Mark)</span>
+                                <span class="mx-2">vs</span>
+                                <span class="badge bg-danger">@gameState.Player2Username (@gameState.Player2Mark)</span>
+                            </h5>
+                        </div>
+
+                        @if (!gameState.IsGameOver)
+                        {
+                            <div class="alert @(IsMyTurn() ? "alert-success" : "alert-info")">
+                                @if (IsMyTurn())
+                                {
+                                    <strong>Your turn!</strong>
+                                }
+                                else
+                                {
+                                    <span>Waiting for @GetCurrentPlayerName()...</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert @(IsWinner() ? "alert-success" : "alert-info")">
+                                <h5 class="mb-0">@gameState.ResultMessage</h5>
+                            </div>
+                            <button class="btn btn-primary" @onclick="BackToLobby">
+                                Back to Lobby
+                            </button>
+                        }
+
+                        <div class="game-board mt-4">
+                            @for (int row = 0; row < gameState.BoardSize; row++)
+                            {
+                                <div class="board-row">
+                                    @for (int col = 0; col < gameState.BoardSize; col++)
+                                    {
+                                        var currentRow = row;
+                                        var currentCol = col;
+                                        var cellIndex = row * gameState.BoardSize + col;
+                                        var cellValue = gameState.BoardData[cellIndex];
+                                        
+                                        <button class="board-cell @GetCellClass(cellValue)"
+                                                @onclick="() => MakeMove(currentRow, currentCol)"
+                                                disabled="@(!CanMakeMove(cellValue))">
+                                            @(cellValue == ' ' ? "" : cellValue.ToString())
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger mt-3">@errorMessage</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .game-board {
+        display: inline-block;
+    }
+
+    .board-row {
+        display: flex;
+        justify-content: center;
+    }
+
+    .board-cell {
+        width: 80px;
+        height: 80px;
+        font-size: 2rem;
+        font-weight: bold;
+        border: 2px solid #333;
+        background-color: #fff;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .board-cell:hover:not(:disabled) {
+        background-color: #f0f0f0;
+    }
+
+    .board-cell:disabled {
+        cursor: not-allowed;
+    }
+
+    .board-cell.x-mark {
+        color: #0d6efd;
+    }
+
+    .board-cell.o-mark {
+        color: #dc3545;
+    }
+
+    .board-cell:not(:disabled):hover {
+        background-color: #e9ecef;
+    }
+</style>
+
+@code {
+    private HubConnection? hubConnection;
+    private GameState? gameState;
+    private string username = "";
+    private string currentGameId = "";
+    private string errorMessage = "";
+    private string myConnectionId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Get username and game ID from session
+        var usernameResult = await SessionStorage.GetAsync<string>("username");
+        var gameIdResult = await SessionStorage.GetAsync<string>("currentGameId");
+
+        if (!usernameResult.Success || string.IsNullOrEmpty(usernameResult.Value))
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        username = usernameResult.Value;
+
+        if (gameIdResult.Success && !string.IsNullOrEmpty(gameIdResult.Value))
+        {
+            currentGameId = gameIdResult.Value;
+        }
+
+        // Set up SignalR connection
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/gamehub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // Register handlers
+        hubConnection.On<GameState>("OnGameStarted", (state) =>
+        {
+            gameState = state;
+            currentGameId = state.GameId;
+            myConnectionId = hubConnection.ConnectionId ?? "";
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<int, int, char>("OnMoveMade", (row, col, mark) =>
+        {
+            if (gameState != null)
+            {
+                var cellIndex = row * gameState.BoardSize + col;
+                gameState.BoardData[cellIndex] = mark;
+                
+                // Toggle current player
+                if (gameState.CurrentPlayerConnectionId == gameState.Player1ConnectionId)
+                {
+                    gameState.CurrentPlayerConnectionId = gameState.Player2ConnectionId;
+                }
+                else
+                {
+                    gameState.CurrentPlayerConnectionId = gameState.Player1ConnectionId;
+                }
+                
+                InvokeAsync(StateHasChanged);
+            }
+        });
+
+        hubConnection.On<string?, string>("OnGameEnded", (winnerConnectionId, resultMessage) =>
+        {
+            if (gameState != null)
+            {
+                gameState.IsGameOver = true;
+                gameState.WinnerConnectionId = winnerConnectionId;
+                gameState.ResultMessage = resultMessage;
+                InvokeAsync(StateHasChanged);
+            }
+        });
+
+        hubConnection.On<string>("Error", (message) =>
+        {
+            errorMessage = message;
+            InvokeAsync(StateHasChanged);
+        });
+
+        // Start connection
+        try
+        {
+            await hubConnection.StartAsync();
+            myConnectionId = hubConnection.ConnectionId ?? "";
+            
+            // If we have a game ID, we're reconnecting
+            // Otherwise wait for OnGameStarted event
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error connecting to server: {ex.Message}";
+        }
+    }
+
+    private async Task MakeMove(int row, int col)
+    {
+        if (hubConnection is not null && gameState is not null && !gameState.IsGameOver)
+        {
+            if (!IsMyTurn())
+            {
+                errorMessage = "It's not your turn!";
+                return;
+            }
+
+            var cellIndex = row * gameState.BoardSize + col;
+            if (gameState.BoardData[cellIndex] != ' ')
+            {
+                errorMessage = "Cell is already occupied!";
+                return;
+            }
+
+            errorMessage = "";
+
+            try
+            {
+                await hubConnection.SendAsync("MakeMove", currentGameId, row, col);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error making move: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task LeaveGame()
+    {
+        if (hubConnection is not null && !string.IsNullOrEmpty(currentGameId))
+        {
+            try
+            {
+                await hubConnection.SendAsync("LeaveGame", currentGameId);
+                await BackToLobby();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error leaving game: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task BackToLobby()
+    {
+        await SessionStorage.DeleteAsync("currentGameId");
+        Navigation.NavigateTo("/lobby");
+    }
+
+    private bool IsMyTurn()
+    {
+        if (gameState == null || hubConnection == null)
+            return false;
+
+        var myId = hubConnection.ConnectionId;
+        return gameState.CurrentPlayerConnectionId == myId;
+    }
+
+    private bool IsWinner()
+    {
+        if (gameState == null || hubConnection == null)
+            return false;
+
+        var myId = hubConnection.ConnectionId;
+        return gameState.WinnerConnectionId == myId;
+    }
+
+    private string GetCurrentPlayerName()
+    {
+        if (gameState == null)
+            return "";
+
+        return gameState.CurrentPlayerConnectionId == gameState.Player1ConnectionId
+            ? gameState.Player1Username
+            : gameState.Player2Username;
+    }
+
+    private bool CanMakeMove(char cellValue)
+    {
+        return !gameState?.IsGameOver == true && IsMyTurn() && cellValue == ' ';
+    }
+
+    private string GetCellClass(char cellValue)
+    {
+        return cellValue switch
+        {
+            'X' => "x-mark",
+            'O' => "o-mark",
+            _ => ""
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

@@ -1,0 +1,306 @@
+@page "/lobby"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using TicTacToe.Web.Models
+@inject NavigationManager Navigation
+@inject ProtectedSessionStorage SessionStorage
+@implements IAsyncDisposable
+
+<PageTitle>Lobby - Tic-Tac-Toe</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>Game Lobby</h2>
+            
+            @if (!isConnected)
+            {
+                <div class="alert alert-info">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    Connecting to lobby...
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-success">
+                    Connected as <strong>@username</strong>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">Start a Game</h5>
+                    </div>
+                    <div class="card-body">
+                        <button class="btn btn-primary me-2" @onclick="StartAIGame">
+                            🤖 Play vs AI
+                        </button>
+                        <button class="btn btn-secondary" @onclick="LeaveLobbyClick">
+                            🚪 Leave Lobby
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Online Players (@connectedUsers.Count)</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (connectedUsers.Count == 0)
+                        {
+                            <p class="text-muted">No other players online</p>
+                        }
+                        else
+                        {
+                            <div class="list-group">
+                                @foreach (var user in connectedUsers.Where(u => u.ConnectionId != hubConnection?.ConnectionId))
+                                {
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>@user.Username</strong>
+                                            <span class="badge @GetStatusBadgeClass(user.Status) ms-2">
+                                                @GetStatusText(user.Status)
+                                            </span>
+                                        </div>
+                                        @if (user.Status == UserStatus.Available)
+                                        {
+                                            <button class="btn btn-sm btn-primary" 
+                                                    @onclick="() => InvitePlayer(user.ConnectionId)">
+                                                Invite
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mt-3">@errorMessage</div>
+            }
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Invitations</h5>
+                </div>
+                <div class="card-body">
+                    @if (pendingInvitations.Count == 0)
+                    {
+                        <p class="text-muted">No pending invitations</p>
+                    }
+                    else
+                    {
+                        @foreach (var invitation in pendingInvitations)
+                        {
+                            <div class="card mb-2">
+                                <div class="card-body">
+                                    <p class="mb-2"><strong>@invitation.Username</strong> invited you to play</p>
+                                    <button class="btn btn-sm btn-success me-2" 
+                                            @onclick="() => AcceptInvitation(invitation.ConnectionId)">
+                                        Accept
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" 
+                                            @onclick="() => DeclineInvitation(invitation.ConnectionId)">
+                                        Decline
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private HubConnection? hubConnection;
+    private string username = "";
+    private bool isConnected = false;
+    private string errorMessage = "";
+    private List<ConnectedUser> connectedUsers = new();
+    private List<(string ConnectionId, string Username)> pendingInvitations = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Get username from session
+        var result = await SessionStorage.GetAsync<string>("username");
+        if (!result.Success || string.IsNullOrEmpty(result.Value))
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        username = result.Value;
+
+        // Set up SignalR connection
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/gamehub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // Register handlers
+        hubConnection.On<string>("JoinedLobby", (username) =>
+        {
+            isConnected = true;
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<string, string>("OnUserConnected", (connectionId, username) =>
+        {
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<string>("OnUserDisconnected", (connectionId) =>
+        {
+            connectedUsers.RemoveAll(u => u.ConnectionId == connectionId);
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<List<ConnectedUser>>("OnLobbyUpdated", (users) =>
+        {
+            connectedUsers = users;
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<string, string>("OnGameInvitation", (fromConnectionId, fromUsername) =>
+        {
+            pendingInvitations.Add((fromConnectionId, fromUsername));
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<string>("OnInvitationDeclined", (connectionId) =>
+        {
+            errorMessage = "Your invitation was declined";
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<GameState>("OnGameStarted", (gameState) =>
+        {
+            // Store game state and navigate to game page
+            SessionStorage.SetAsync("currentGameId", gameState.GameId);
+            Navigation.NavigateTo("/game");
+        });
+
+        hubConnection.On<string>("Error", (message) =>
+        {
+            errorMessage = message;
+            InvokeAsync(StateHasChanged);
+        });
+
+        // Start connection
+        try
+        {
+            await hubConnection.StartAsync();
+            await hubConnection.SendAsync("JoinLobby", username);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error connecting to server: {ex.Message}";
+        }
+    }
+
+    private async Task InvitePlayer(string targetConnectionId)
+    {
+        if (hubConnection is not null)
+        {
+            try
+            {
+                await hubConnection.SendAsync("InvitePlayer", targetConnectionId);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error sending invitation: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task AcceptInvitation(string inviterConnectionId)
+    {
+        if (hubConnection is not null)
+        {
+            try
+            {
+                await hubConnection.SendAsync("AcceptInvitation", inviterConnectionId);
+                pendingInvitations.RemoveAll(i => i.ConnectionId == inviterConnectionId);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error accepting invitation: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task DeclineInvitation(string inviterConnectionId)
+    {
+        if (hubConnection is not null)
+        {
+            try
+            {
+                await hubConnection.SendAsync("DeclineInvitation", inviterConnectionId);
+                pendingInvitations.RemoveAll(i => i.ConnectionId == inviterConnectionId);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error declining invitation: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task StartAIGame()
+    {
+        if (hubConnection is not null)
+        {
+            try
+            {
+                await hubConnection.SendAsync("StartGameWithAI");
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error starting AI game: {ex.Message}";
+            }
+        }
+    }
+
+    private void LeaveLobbyClick()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private string GetStatusBadgeClass(UserStatus status)
+    {
+        return status switch
+        {
+            UserStatus.Available => "bg-success",
+            UserStatus.InGame => "bg-primary",
+            UserStatus.PendingInvitation => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetStatusText(UserStatus status)
+    {
+        return status switch
+        {
+            UserStatus.Available => "Available",
+            UserStatus.InGame => "In Game",
+            UserStatus.PendingInvitation => "Busy",
+            _ => "Unknown"
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
