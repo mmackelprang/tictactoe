@@ -145,25 +145,37 @@
     private string currentGameId = "";
     private string errorMessage = "";
     private string myConnectionId = "";
+    private bool isInitialized = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !isInitialized)
+        {
+            isInitialized = true;
+            await InitializeAsync();
+        }
+    }
+
+    private async Task InitializeAsync()
     {
         // Get username and game ID from session
-        var usernameResult = await SessionStorage.GetAsync<string>("username");
-        var gameIdResult = await SessionStorage.GetAsync<string>("currentGameId");
-
-        if (!usernameResult.Success || string.IsNullOrEmpty(usernameResult.Value))
+        try
         {
-            Navigation.NavigateTo("/");
-            return;
-        }
+            var usernameResult = await SessionStorage.GetAsync<string>("username");
+            var gameIdResult = await SessionStorage.GetAsync<string>("currentGameId");
 
-        username = usernameResult.Value;
+            if (!usernameResult.Success || string.IsNullOrEmpty(usernameResult.Value))
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
 
-        if (gameIdResult.Success && !string.IsNullOrEmpty(gameIdResult.Value))
-        {
-            currentGameId = gameIdResult.Value;
-        }
+            username = usernameResult.Value;
+
+            if (gameIdResult.Success && !string.IsNullOrEmpty(gameIdResult.Value))
+            {
+                currentGameId = gameIdResult.Value;
+            }
 
         // Set up SignalR connection
         hubConnection = new HubConnectionBuilder()
@@ -230,6 +242,14 @@
         catch (Exception ex)
         {
             errorMessage = $"Error connecting to server: {ex.Message}";
+        }
+
+        StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Initialization error: {ex.Message}";
+            StateHasChanged();
         }
     }
 

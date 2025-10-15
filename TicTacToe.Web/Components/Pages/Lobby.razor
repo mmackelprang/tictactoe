@@ -127,18 +127,30 @@
     private string errorMessage = "";
     private List<ConnectedUser> connectedUsers = new();
     private List<(string ConnectionId, string Username)> pendingInvitations = new();
+    private bool isInitialized = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !isInitialized)
+        {
+            isInitialized = true;
+            await InitializeAsync();
+        }
+    }
+
+    private async Task InitializeAsync()
     {
         // Get username from session
-        var result = await SessionStorage.GetAsync<string>("username");
-        if (!result.Success || string.IsNullOrEmpty(result.Value))
+        try
         {
-            Navigation.NavigateTo("/");
-            return;
-        }
+            var result = await SessionStorage.GetAsync<string>("username");
+            if (!result.Success || string.IsNullOrEmpty(result.Value))
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
 
-        username = result.Value;
+            username = result.Value;
 
         // Set up SignalR connection
         hubConnection = new HubConnectionBuilder()
@@ -204,6 +216,14 @@
         catch (Exception ex)
         {
             errorMessage = $"Error connecting to server: {ex.Message}";
+        }
+
+        StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Initialization error: {ex.Message}";
+            StateHasChanged();
         }
     }
 

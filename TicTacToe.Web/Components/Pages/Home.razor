@@ -1,4 +1,5 @@
 ﻿@page "/"
+@rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject ProtectedSessionStorage SessionStorage
 @inject NavigationManager Navigation
@@ -50,10 +51,17 @@
         if (firstRender)
         {
             // Check if user already has a username stored
-            var result = await SessionStorage.GetAsync<string>("username");
-            if (result.Success && !string.IsNullOrEmpty(result.Value))
+            try
             {
-                Navigation.NavigateTo("/lobby");
+                var result = await SessionStorage.GetAsync<string>("username");
+                if (result.Success && !string.IsNullOrEmpty(result.Value))
+                {
+                    Navigation.NavigateTo("/lobby");
+                }
+            }
+            catch
+            {
+                // Ignore errors during initialization
             }
         }
     }
