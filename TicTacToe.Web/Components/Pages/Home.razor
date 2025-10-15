@@ -8,7 +8,7 @@
 
 <div class="container mt-5">
     <div class="row justify-content-center">
-        <div class="col-md-6 text-center">
+        <div class="col-md-8 text-center">
             <h1 class="display-4 mb-4">🎮 Tic-Tac-Toe</h1>
             <p class="lead mb-4">Welcome to the multiplayer Tic-Tac-Toe game!</p>
             
@@ -25,6 +25,44 @@
                                    placeholder="Enter your username"
                                    maxlength="20" />
                         </div>
+                        
+                        <hr class="my-4" />
+                        
+                        <h6 class="mb-3">Game Settings</h6>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6 text-start">
+                                <label class="form-label">Board Size</label>
+                                <select class="form-select" @bind="boardSize">
+                                    <option value="3">3x3 (Classic)</option>
+                                    <option value="4">4x4</option>
+                                    <option value="5">5x5</option>
+                                    <option value="6">6x6</option>
+                                    <option value="7">7x7</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 text-start">
+                                <label class="form-label">Win Condition</label>
+                                <select class="form-select" @bind="winCondition">
+                                    @for (int i = 3; i <= Math.Min(boardSize, 6); i++)
+                                    {
+                                        <option value="@i">@i in a row</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-12 text-start">
+                                <label class="form-label">AI Difficulty (for AI games)</label>
+                                <select class="form-select" @bind="aiDifficulty">
+                                    <option value="Easy">Easy</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Hard">Hard</option>
+                                </select>
+                            </div>
+                        </div>
+                        
                         @if (!string.IsNullOrEmpty(errorMessage))
                         {
                             <div class="alert alert-danger">@errorMessage</div>
@@ -45,6 +83,9 @@
     private string username = "";
     private bool hasUsername = false;
     private string errorMessage = "";
+    private int boardSize = 3;
+    private int winCondition = 3;
+    private string aiDifficulty = "Medium";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -80,8 +121,24 @@
             return;
         }
 
-        // Store username and navigate to lobby
+        // Validate win condition
+        if (winCondition > boardSize)
+        {
+            errorMessage = $"Win condition cannot be greater than board size ({boardSize})";
+            return;
+        }
+
+        if (winCondition > 6)
+        {
+            errorMessage = "Win condition cannot be greater than 6";
+            return;
+        }
+
+        // Store username and game settings, then navigate to lobby
         await SessionStorage.SetAsync("username", username.Trim());
+        await SessionStorage.SetAsync("boardSize", boardSize);
+        await SessionStorage.SetAsync("winCondition", winCondition);
+        await SessionStorage.SetAsync("aiDifficulty", aiDifficulty);
         Navigation.NavigateTo("/lobby");
     }
 }

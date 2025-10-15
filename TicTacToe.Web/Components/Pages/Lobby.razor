@@ -128,6 +128,9 @@
     private List<ConnectedUser> connectedUsers = new();
     private List<(string ConnectionId, string Username)> pendingInvitations = new();
     private bool isInitialized = false;
+    private int boardSize = 3;
+    private int winCondition = 3;
+    private string aiDifficulty = "Medium";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -140,7 +143,7 @@
 
     private async Task InitializeAsync()
     {
-        // Get username from session
+        // Get username and game settings from session
         try
         {
             var result = await SessionStorage.GetAsync<string>("username");
@@ -151,6 +154,25 @@
             }
 
             username = result.Value;
+
+            // Load game settings
+            var boardSizeResult = await SessionStorage.GetAsync<int>("boardSize");
+            if (boardSizeResult.Success)
+            {
+                boardSize = boardSizeResult.Value;
+            }
+
+            var winConditionResult = await SessionStorage.GetAsync<int>("winCondition");
+            if (winConditionResult.Success)
+            {
+                winCondition = winConditionResult.Value;
+            }
+
+            var aiDifficultyResult = await SessionStorage.GetAsync<string>("aiDifficulty");
+            if (aiDifficultyResult.Success && !string.IsNullOrEmpty(aiDifficultyResult.Value))
+            {
+                aiDifficulty = aiDifficultyResult.Value;
+            }
 
         // Set up SignalR connection
         hubConnection = new HubConnectionBuilder()
@@ -295,7 +317,7 @@
         {
             try
             {
-                await hubConnection.SendAsync("StartGameWithAI");
+                await hubConnection.SendAsync("StartGameWithAI", boardSize, winCondition, aiDifficulty);
             }
             catch (Exception ex)
             {

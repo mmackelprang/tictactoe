@@ -59,16 +59,31 @@ public class GameService
     /// <param name="playerUsername">Player's username.</param>
     /// <param name="boardSize">The board size.</param>
     /// <param name="winCondition">The win condition.</param>
+    /// <param name="aiDifficulty">The AI difficulty level.</param>
     /// <returns>The created game session.</returns>
     public GameSession CreatePlayerVsAIGame(
         string playerConnectionId,
         string playerUsername,
         int boardSize = 3,
-        int winCondition = 3)
+        int winCondition = 3,
+        AIDifficulty aiDifficulty = AIDifficulty.Medium)
     {
         var board = new Board(boardSize, winCondition);
         var player = new NetworkPlayer('X', playerUsername);
-        var aiPlayer = new ComputerPlayer('O', "AI");
+        
+        // Create AI player based on difficulty
+        Player aiPlayer;
+        if (aiDifficulty == AIDifficulty.Easy)
+        {
+            aiPlayer = new ComputerPlayer('O', "AI");
+        }
+        else
+        {
+            var minimaxDifficulty = aiDifficulty == AIDifficulty.Medium 
+                ? MinimaxAIPlayer.Difficulty.Medium 
+                : MinimaxAIPlayer.Difficulty.Hard;
+            aiPlayer = new MinimaxAIPlayer('O', "AI", minimaxDifficulty);
+        }
 
         var gameSession = new GameSession(
             board,
