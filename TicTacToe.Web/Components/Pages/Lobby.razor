@@ -128,6 +128,9 @@
     private List<ConnectedUser> connectedUsers = new();
     private List<(string ConnectionId, string Username)> pendingInvitations = new();
     private bool isInitialized = false;
+    private int boardSize = 3;
+    private int winCondition = 3;
+    private string aiDifficulty = "Medium";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -140,7 +143,7 @@
 
     private async Task InitializeAsync()
     {
-        // Get username from session
+        // Get username and game settings from session
         try
         {
             var result = await SessionStorage.GetAsync<string>("username");
@@ -151,6 +154,25 @@
             }
 
             username = result.Value;
+
+            // Load game settings
+            var boardSizeResult = await SessionStorage.GetAsync<int>("boardSize");
+            if (boardSizeResult.Success)
+            {
+                boardSize = boardSizeResult.Value;
+            }
+
+            var winConditionResult = await SessionStorage.GetAsync<int>("winCondition");
+            if (winConditionResult.Success)
+            {
+                winCondition = winConditionResult.Value;
+            }
+
+            var aiDifficultyResult = await SessionStorage.GetAsync<string>("aiDifficulty");
+            if (aiDifficultyResult.Success && !string.IsNullOrEmpty(aiDifficultyResult.Value))
+            {
+                aiDifficulty = aiDifficultyResult.Value;
+            }
 
         // Set up SignalR connection
         hubConnection = new HubConnectionBuilder()
@@ -194,12 +216,26 @@
             InvokeAsync(StateHasChanged);
         });
 
-        hubConnection.On<GameState>("OnGameStarted", async (gameState) =>
+        hubConnection.On<GameState>("OnGameStarted", (gameState) =>
         {
             // Store game state in session and navigate to game page
-            await SessionStorage.SetAsync("currentGameId", gameState.GameId);
-            await SessionStorage.SetAsync("currentGameState", gameState);
-            Navigation.NavigateTo("/game");
+            InvokeAsync(async () =>
+            {
+                await SessionStorage.SetAsync("currentGameId", gameState.GameId);
+                await SessionStorage.SetAsync("currentGameState", gameState);
+                
+                // Leave lobby cleanly before navigating to avoid game being ended
+                try
+                {
+                    await hubConnection.SendAsync("LeaveLobby");
+                }
+                catch
+                {
+                    // Ignore errors during cleanup
+                }
+                
+                Navigation.NavigateTo("/game");
+            });
         });
 
         hubConnection.On<string>("Error", (message) =>
@@ -281,7 +317,7 @@
         {
             try
             {
-                await hubConnection.SendAsync("StartGameWithAI");
+                await hubConnection.SendAsync("StartGameWithAI", boardSize, winCondition, aiDifficulty);
             }
             catch (Exception ex)
             {
@@ -290,8 +326,10 @@
         }
     }
 
-    private void LeaveLobbyClick()
+    private async Task LeaveLobbyClick()
     {
+        // Clear the username from session storage
+        await SessionStorage.DeleteAsync("username");
         Navigation.NavigateTo("/");
     }
 

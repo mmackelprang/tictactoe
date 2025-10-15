@@ -59,16 +59,31 @@ public class GameService
     /// <param name="playerUsername">Player's username.</param>
     /// <param name="boardSize">The board size.</param>
     /// <param name="winCondition">The win condition.</param>
+    /// <param name="aiDifficulty">The AI difficulty level.</param>
     /// <returns>The created game session.</returns>
     public GameSession CreatePlayerVsAIGame(
         string playerConnectionId,
         string playerUsername,
         int boardSize = 3,
-        int winCondition = 3)
+        int winCondition = 3,
+        AIDifficulty aiDifficulty = AIDifficulty.Medium)
     {
         var board = new Board(boardSize, winCondition);
         var player = new NetworkPlayer('X', playerUsername);
-        var aiPlayer = new ComputerPlayer('O', "AI");
+        
+        // Create AI player based on difficulty
+        Player aiPlayer;
+        if (aiDifficulty == AIDifficulty.Easy)
+        {
+            aiPlayer = new ComputerPlayer('O', "AI");
+        }
+        else
+        {
+            var minimaxDifficulty = aiDifficulty == AIDifficulty.Medium 
+                ? MinimaxAIPlayer.Difficulty.Medium 
+                : MinimaxAIPlayer.Difficulty.Hard;
+            aiPlayer = new MinimaxAIPlayer('O', "AI", minimaxDifficulty);
+        }
 
         var gameSession = new GameSession(
             board,
@@ -167,6 +182,33 @@ public class GameService
     public bool RemoveGame(string gameId)
     {
         return _games.TryRemove(gameId, out _);
+    }
+
+    /// <summary>
+    /// Updates a player's connection ID in a game (for handling reconnections).
+    /// </summary>
+    /// <param name="gameId">The game ID.</param>
+    /// <param name="oldConnectionId">The old connection ID to replace.</param>
+    /// <param name="newConnectionId">The new connection ID.</param>
+    /// <returns>True if updated successfully.</returns>
+    public bool UpdateConnectionId(string gameId, string oldConnectionId, string newConnectionId)
+    {
+        var game = GetGame(gameId);
+        if (game == null)
+            return false;
+
+        if (game.Player1ConnectionId == oldConnectionId)
+        {
+            game.Player1ConnectionId = newConnectionId;
+            return true;
+        }
+        else if (game.Player2ConnectionId == oldConnectionId)
+        {
+            game.Player2ConnectionId = newConnectionId;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

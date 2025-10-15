@@ -243,11 +243,43 @@
             await hubConnection.StartAsync();
             myConnectionId = hubConnection.ConnectionId ?? "";
             
-            // If we loaded the game state from session, update it with the connection ID
-            if (gameState != null)
+            // If we loaded the game state from session, we need to rejoin the game with our new connection
+            if (gameState != null && !string.IsNullOrEmpty(currentGameId))
             {
-                // The connection ID might be different now, so we need to ensure
-                // the game recognizes us as the correct player
+                // Determine which player we are by checking username
+                string oldConnectionId;
+                if (gameState.Player1Username == username)
+                {
+                    oldConnectionId = gameState.Player1ConnectionId;
+                    gameState.Player1ConnectionId = myConnectionId;
+                }
+                else if (gameState.Player2Username == username)
+                {
+                    oldConnectionId = gameState.Player2ConnectionId;
+                    gameState.Player2ConnectionId = myConnectionId;
+                }
+                else
+                {
+                    errorMessage = "Unable to identify player in game";
+                    return;
+                }
+                
+                // Tell the server we're rejoining with a new connection ID
+                try
+                {
+                    await hubConnection.SendAsync("RejoinGame", currentGameId, oldConnectionId);
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = $"Error rejoining game: {ex.Message}";
+                }
+                
+                // If this player was the current player, update that too
+                if (gameState.CurrentPlayerConnectionId == oldConnectionId)
+                {
+                    gameState.CurrentPlayerConnectionId = myConnectionId;
+                }
+                
                 StateHasChanged();
             }
             

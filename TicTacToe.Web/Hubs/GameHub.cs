@@ -155,7 +155,10 @@ public class GameHub : Hub
     /// <summary>
     /// Called when a player starts a game against AI.
     /// </summary>
-    public async Task StartGameWithAI()
+    /// <param name="boardSize">The board size.</param>
+    /// <param name="winCondition">The win condition.</param>
+    /// <param name="aiDifficulty">The AI difficulty level.</param>
+    public async Task StartGameWithAI(int boardSize = 3, int winCondition = 3, string aiDifficulty = "Medium")
     {
         var user = _lobbyService.GetUser(Context.ConnectionId);
         if (user == null)
@@ -164,8 +167,13 @@ public class GameHub : Hub
             return;
         }
 
-        // Create the game
-        var game = _gameService.CreatePlayerVsAIGame(Context.ConnectionId, user.Username);
+        // Parse AI difficulty
+        var difficulty = Enum.TryParse<AIDifficulty>(aiDifficulty, out var parsedDifficulty) 
+            ? parsedDifficulty 
+            : AIDifficulty.Medium;
+
+        // Create the game with specified settings
+        var game = _gameService.CreatePlayerVsAIGame(Context.ConnectionId, user.Username, boardSize, winCondition, difficulty);
 
         // Update user status
         _lobbyService.UpdateUserStatus(Context.ConnectionId, UserStatus.InGame, game.GameId);
@@ -177,6 +185,27 @@ public class GameHub : Hub
         // Notify lobby of status change
         var users = _lobbyService.GetAllUsers();
         await Clients.All.SendAsync("OnLobbyUpdated", users);
+    }
+
+    /// <summary>
+    /// Called when a player reconnects to an existing game with a new connection.
+    /// </summary>
+    /// <param name="gameId">The game ID to rejoin.</param>
+    /// <param name="oldConnectionId">The old connection ID to replace.</param>
+    public async Task RejoinGame(string gameId, string oldConnectionId)
+    {
+        var game = _gameService.GetGame(gameId);
+        if (game == null)
+        {
+            await Clients.Caller.SendAsync("Error", "Game not found");
+            return;
+        }
+
+        // Update the connection ID in the game
+        _gameService.UpdateConnectionId(gameId, oldConnectionId, Context.ConnectionId);
+
+        // Send acknowledgment (game state will be loaded from session on client)
+        await Clients.Caller.SendAsync("OnGameRejoined");
     }
 
     /// <summary>
